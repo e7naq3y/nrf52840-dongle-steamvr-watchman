@@ -6,6 +6,11 @@ name: star-unlock
 on:
   watch:
     types: [started]
+  workflow_dispatch:            # 手动补发邀请：Actions 页 Run workflow，填 GitHub 用户名
+    inputs:
+      user:
+        description: 要检查并邀请的 GitHub 用户名
+        required: true
 permissions: {}
 jobs:
   unlock:
@@ -14,7 +19,7 @@ jobs:
       - name: 检查是否关注作者，是则邀请进私有仓库
         env:
           GH_TOKEN: ${{ secrets.UNLOCK_TOKEN }}
-          STARGAZER: ${{ github.event.sender.login }}
+          STARGAZER: ${{ inputs.user || github.event.sender.login }}
           OWNER: ${{ github.repository_owner }}
           PRIVATE_REPO: ${{ vars.PRIVATE_REPO }}
         run: |
