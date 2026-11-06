@@ -1,0 +1,34 @@
+# 有人 Star 本仓库时触发：如果他已经 Follow 仓库作者，就把他加为私有仓库的只读协作者（GitHub 会发邀请邮件）。
+# 需要在仓库 Settings 里配置：
+#   Secrets  → UNLOCK_TOKEN   作者的 PAT（classic 勾 repo；或 fine-grained，对私有仓库有 Administration: write）
+#   Variables → PRIVATE_REPO   私有仓库全名，例如 e7naq3y/nrf52840-watchman-solution
+name: star-unlock
+on:
+  watch:
+    types: [started]
+permissions: {}
+jobs:
+  unlock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检查是否关注作者，是则邀请进私有仓库
+        env:
+          GH_TOKEN: ${{ secrets.UNLOCK_TOKEN }}
+          STARGAZER: ${{ github.event.sender.login }}
+          OWNER: ${{ github.repository_owner }}
+          PRIVATE_REPO: ${{ vars.PRIVATE_REPO }}
+        run: |
+          set -e
+          api() { curl -s -o /tmp/body -w '%{http_code}' -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$@"; }
+          if [ "$STARGAZER" = "$OWNER" ]; then echo "作者自己，跳过"; exit 0; fi
+          code=$(api "https://api.github.com/users/$STARGAZER/following/$OWNER")
+          if [ "$code" != "204" ]; then
+            echo "$STARGAZER 还没关注 $OWNER（HTTP $code），不邀请。关注后取消 Star 再点一次即可。"
+            exit 0
+          fi
+          code=$(api -X PUT "https://api.github.com/repos/$PRIVATE_REPO/collaborators/$STARGAZER" -d '{"permission":"pull"}')
+          case "$code" in
+            201) echo "已向 $STARGAZER 发出私有仓库邀请";;
+            204) echo "$STARGAZER 已经是协作者";;
+            *) echo "邀请失败 HTTP $code"; cat /tmp/body; exit 1;;
+          esac
